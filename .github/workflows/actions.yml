@@ -1,0 +1,55 @@
+name: Basic submission verifications
+on: push
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    container: haskell:9.0.2
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Permissions bug workaround
+        run: "chown -R $(id -un):$(id -gn) ~"
+
+      - name: Build code
+        run: stack build --allow-different-user
+
+      - name: Notify if code did not build
+        if: failure()
+        run: |
+          curl --request POST \
+          --url https://api.github.com/repos/${{ github.repository }}/issues \
+          --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+          --header 'content-type: application/json' \
+          --data '{
+          "title": "[AUTO] Submissão não compilou",
+          "body": "Este issue foi aberto automaticamente pois o commit _${{ github.sha }}_ não compilou.",
+          "assignees": ["${{ github.actor }}"]
+          }'
+
+      - name: Run tests
+        id: run_tests
+        run: |
+          echo "::set-output name=codecompiled::1\n"
+          stack test > test_result.log
+
+      - name: Count number of successful tests
+        if: failure() && steps.run_tests.outputs.codecompiled == 1 
+        id: count_success
+        run: echo "::set-output name=oks::$(cat test_result.log | grep "OK" | wc -l)\n"
+        # It no OK is found on the output of 'stack test', then no test passed
+
+      - name: Notify student if code failed all tests
+        if: failure() && steps.count_success.outputs.oks == 0 && steps.run_tests.outputs.codecompiled == 1 
+        run: |
+          curl --request POST \
+          --url https://api.github.com/repos/${{ github.repository }}/issues \
+          --header 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+          --header 'content-type: application/json' \
+          --data '{
+          "title": "[AUTO] Submissão não passou em nenhum teste",
+          "body": "Este issue foi aberto automaticamente pois o commit _${{ github.sha }}_ não passou em nenhum teste (apesar de ter compilado).",
+          "assignees": ["${{ github.actor }}"]
+          }'
+
+
