@@ -39,7 +39,7 @@ jobs:
         run: echo "::set-output name=oks::$(cat test_result.log | grep "OK" | wc -l)\n"
         # It no OK is found on the output of 'stack test', then no test passed
 
-      - name: Notify student if code failed all tests
+      - name: Notify if code failed all tests
         if: failure() && steps.count_success.outputs.oks == 0 && steps.run_tests.outputs.codecompiled == 1 
         run: |
           curl --request POST \
